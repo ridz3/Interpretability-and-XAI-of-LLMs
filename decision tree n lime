@@ -1,0 +1,95 @@
+# Step 1: Install required libraries
+!pip install kagglehub
+!pip install graphviz
+!pip install lime
+
+# Step 2: Import libraries
+import kagglehub
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn import tree
+
+# Step 3: Download dataset using kagglehub
+path = kagglehub.dataset_download("debasisdotcom/parkinson-disease-detection")
+print("Dataset downloaded to:", path)
+
+# Step 4: Automatically find the CSV file
+csv_file = None
+for root, dirs, files in os.walk(path):
+    for file in files:
+        if file.endswith(".csv"):
+            csv_file = os.path.join(root, file)
+
+if csv_file:
+    print("Found file:", csv_file)
+    df = pd.read_csv(csv_file)
+else:
+    raise FileNotFoundError("No CSV file found in dataset!")
+
+# Show the data
+print("First 5 rows of the dataset:")
+print(df.head())
+
+# Step 5: Check for nulls and info
+print("\nDataset Info:")
+print(df.info())
+
+print("\nMissing values per column:")
+print(df.isnull().sum())
+
+# Step 6: Feature and target split
+X = df.drop(['status', 'name'], axis=1)
+y = df['status']
+
+# Step 7: Train-Test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Step 8: Train Decision Tree model
+clf = DecisionTreeClassifier(criterion='entropy', random_state=42)
+clf.fit(X_train, y_train)
+
+# Step 9: Predictions and Evaluation
+y_pred = clf.predict(X_test)
+
+print("\nAccuracy:", accuracy_score(y_test, y_pred))
+print("\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred))
+print("\nClassification Report:\n", classification_report(y_test, y_pred))
+
+# Step 10: Visualize the Decision Tree
+plt.figure(figsize=(20, 10))
+tree.plot_tree(clf, filled=True, feature_names=X.columns, class_names=['Healthy', 'Parkinson'])
+plt.title("Decision Tree for Parkinson's Disease Detection")
+plt.show()
+
+# Step 11: Use LIME to explain predictions
+from lime import lime_tabular
+
+# Create LIME explainer
+explainer = lime_tabular.LimeTabularExplainer(
+    training_data=X_train.values,
+    feature_names=X.columns.tolist(),
+    class_names=['Healthy', 'Parkinson'],
+    mode='classification'
+)
+
+# Pick a sample from the test set to explain
+i = 0  # you can change this index to test different samples
+sample = X_test.iloc[i].values.reshape(1, -1)
+true_label = y_test.iloc[i]
+
+# Explain the prediction
+exp = explainer.explain_instance(
+    data_row=X_test.iloc[i].values,
+    predict_fn=clf.predict_proba
+)
+
+# Print and plot explanation
+print(f"\nExplaining prediction for sample #{i} (True label: {'Parkinson' if true_label == 1 else 'Healthy'})")
+exp.show_in_notebook(show_table=True, show_all=False)
